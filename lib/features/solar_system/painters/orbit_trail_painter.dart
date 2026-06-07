@@ -8,11 +8,13 @@ class OrbitTrailPainter extends CustomPainter {
     required this.planets,
     required this.elapsedSeconds,
     required Listenable repaint,
+    this.sceneScale = 1,
     this.engine = const OrbitalEngine(),
   }) : super(repaint: repaint);
 
   final List<PlacedPlanet> planets;
   final double Function() elapsedSeconds;
+  final double sceneScale;
   final OrbitalEngine engine;
 
   @override
@@ -40,8 +42,8 @@ class OrbitTrailPainter extends CustomPainter {
           ..color = (placed.planet.trailColor ?? placed.planet.colors.first)
               .withValues(alpha: alpha);
         canvas.drawLine(
-          center + samples[index],
-          center + samples[index + 1],
+          center + samples[index] * sceneScale,
+          center + samples[index + 1] * sceneScale,
           paint,
         );
       }
@@ -50,6 +52,7 @@ class OrbitTrailPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant OrbitTrailPainter oldDelegate) {
-    return oldDelegate.planets != planets;
+    return oldDelegate.planets != planets ||
+        oldDelegate.sceneScale != sceneScale;
   }
 }

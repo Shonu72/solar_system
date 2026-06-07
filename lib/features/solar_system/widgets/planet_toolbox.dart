@@ -19,50 +19,78 @@ class PlanetToolbox extends ConsumerWidget {
       }),
     );
 
-    return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFF020711)),
-      child: GlassPanel(
-        margin: const EdgeInsets.fromLTRB(10, 6, 10, 10),
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'DRAG & DROP TO ADD PLANETS',
-              style: TextStyle(
-                color: Color(0xFF4EA6FF),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-                letterSpacing: 0,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 115;
+        final badgeSize = compact ? 32.0 : 58.0;
+        final chipWidth = compact ? 64.0 : 86.0;
+        final separator = compact ? 10.0 : 18.0;
+
+        return GlassPanel(
+          margin: EdgeInsets.fromLTRB(
+            10,
+            compact ? 4 : 6,
+            10,
+            compact ? 6 : 10,
+          ),
+          padding: EdgeInsets.fromLTRB(
+            compact ? 12 : 16,
+            compact ? 6 : 10,
+            compact ? 12 : 16,
+            compact ? 6 : 12,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'DRAG & DROP TO ADD PLANETS',
+                style: TextStyle(
+                  color: const Color(0xFF4EA6FF),
+                  fontWeight: FontWeight.w700,
+                  fontSize: compact ? 11 : 12,
+                  letterSpacing: 0,
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: planets.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 18),
-                itemBuilder: (context, index) {
-                  final planet = planets[index];
-                  return _ToolboxPlanet(
-                    planet: planet,
-                    isPlaced: placedNames.contains(planet.name),
-                  );
-                },
+              SizedBox(height: compact ? 4 : 8),
+              Expanded(
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: planets.length,
+                  separatorBuilder: (_, _) => SizedBox(width: separator),
+                  itemBuilder: (context, index) {
+                    final planet = planets[index];
+                    return _ToolboxPlanet(
+                      planet: planet,
+                      isPlaced: placedNames.contains(planet.name),
+                      badgeSize: badgeSize,
+                      chipWidth: chipWidth,
+                      compact: compact,
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
-        ),
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
 
 class _ToolboxPlanet extends StatelessWidget {
-  const _ToolboxPlanet({required this.planet, required this.isPlaced});
+  const _ToolboxPlanet({
+    required this.planet,
+    required this.isPlaced,
+    required this.badgeSize,
+    required this.chipWidth,
+    required this.compact,
+  });
 
   final PlanetModel planet;
   final bool isPlaced;
+  final double badgeSize;
+  final double chipWidth;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -70,18 +98,20 @@ class _ToolboxPlanet extends StatelessWidget {
       key: ValueKey('toolbox-${planet.name}'),
       opacity: isPlaced ? 0.44 : 1,
       child: SizedBox(
-        width: 86,
+        width: chipWidth,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _PlanetBadge(planet: planet, size: 58),
-            const SizedBox(height: 8),
+            _PlanetBadge(planet: planet, size: badgeSize),
+            SizedBox(height: compact ? 3 : 8),
             Text(
               planet.name,
               overflow: TextOverflow.ellipsis,
+              maxLines: 1,
               style: TextStyle(
                 color: isPlaced ? const Color(0xFF8EA6BD) : Colors.white,
                 fontWeight: FontWeight.w600,
+                fontSize: compact ? 11 : 14,
                 letterSpacing: 0,
               ),
             ),
@@ -103,7 +133,7 @@ class _ToolboxPlanet extends StatelessWidget {
         opacity: 0.9,
         child: Transform.scale(
           scale: 1.15,
-          child: _PlanetBadge(planet: planet, size: 64),
+          child: _PlanetBadge(planet: planet, size: badgeSize + 6),
         ),
       ),
       dragAnchorStrategy: pointerDragAnchorStrategy,

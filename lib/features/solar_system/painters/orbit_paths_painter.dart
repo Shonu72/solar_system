@@ -7,11 +7,13 @@ class OrbitPathsPainter extends CustomPainter {
     required this.planets,
     required this.showLabels,
     this.highlightOrbitIndex,
+    this.sceneScale = 1,
   });
 
   final List<PlanetModel> planets;
   final bool showLabels;
   final int? highlightOrbitIndex;
+  final double sceneScale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -35,8 +37,8 @@ class OrbitPathsPainter extends CustomPainter {
             : const Color(0xFF9AB8D8).withValues(alpha: 0.22);
       final rect = Rect.fromCenter(
         center: Offset.zero,
-        width: planet.orbitRadius * 2,
-        height: planet.orbitHeight * 2,
+        width: planet.orbitRadius * 2 * sceneScale,
+        height: planet.orbitHeight * 2 * sceneScale,
       );
       canvas.drawOval(rect, paint);
     }
@@ -65,8 +67,8 @@ class OrbitPathsPainter extends CustomPainter {
         textDirection: TextDirection.ltr,
       )..layout();
       final offset = Offset(
-        center.dx + planet.orbitRadius + 10,
-        center.dy - planet.orbitHeight * 0.34 - label.height / 2,
+        center.dx + planet.orbitRadius * sceneScale + 10,
+        center.dy - planet.orbitHeight * sceneScale * 0.34 - label.height / 2,
       );
       canvas.drawCircle(offset + const Offset(-6, 8), 2.5, labelPaint);
       label.paint(canvas, offset);
@@ -77,6 +79,7 @@ class OrbitPathsPainter extends CustomPainter {
   bool shouldRepaint(covariant OrbitPathsPainter oldDelegate) {
     return oldDelegate.planets != planets ||
         oldDelegate.showLabels != showLabels ||
-        oldDelegate.highlightOrbitIndex != highlightOrbitIndex;
+        oldDelegate.highlightOrbitIndex != highlightOrbitIndex ||
+        oldDelegate.sceneScale != sceneScale;
   }
 }

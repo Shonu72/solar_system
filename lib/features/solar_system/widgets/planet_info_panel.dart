@@ -13,7 +13,7 @@ class PlanetInfoPanel extends ConsumerWidget {
     final selected = state.selectedPlanet;
 
     return DecoratedBox(
-      decoration: const BoxDecoration(color: Color(0xFF020711)),
+      decoration: const BoxDecoration(color: Color(0x22020711)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

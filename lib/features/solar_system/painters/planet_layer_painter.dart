@@ -15,6 +15,7 @@ class PlanetLayerPainter extends CustomPainter {
     required this.hoveredPlanetId,
     required this.showLabels,
     required Listenable repaint,
+    this.sceneScale = 1,
     this.engine = const OrbitalEngine(),
   }) : super(repaint: repaint);
 
@@ -23,6 +24,7 @@ class PlanetLayerPainter extends CustomPainter {
   final String? selectedPlanetId;
   final String? hoveredPlanetId;
   final bool showLabels;
+  final double sceneScale;
   final OrbitalEngine engine;
   final PlanetSurfacePainter surfacePainter = const PlanetSurfacePainter();
 
@@ -38,11 +40,14 @@ class PlanetLayerPainter extends CustomPainter {
         elapsedSeconds: elapsed - placed.createdAtSeconds,
         startAngle: placed.startAngle,
       );
-      final visualSize = placed.planet.size * position.scale;
+      final visualSize = placed.planet.size * position.scale * sceneScale;
       return RenderedPlanet(
         placedPlanet: placed,
         position: position,
-        center: Offset(center.dx + position.x, center.dy + position.y),
+        center: Offset(
+          center.dx + position.x * sceneScale,
+          center.dy + position.y * sceneScale,
+        ),
         visualSize: visualSize,
       );
     }).toList();
@@ -64,25 +69,33 @@ class PlanetLayerPainter extends CustomPainter {
     final haloPaint = Paint()
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30)
       ..color = const Color(0xFFFFA51F).withValues(alpha: 0.25 + pulse * 0.1);
-    canvas.drawCircle(center, sunRadius * (1.7 + pulse * 0.12), haloPaint);
+    final scaledSunRadius = sunRadius * sceneScale;
+    canvas.drawCircle(
+      center,
+      scaledSunRadius * (1.7 + pulse * 0.12),
+      haloPaint,
+    );
 
     final glowPaint = Paint()
-      ..shader = const RadialGradient(
-        colors: [
-          Color(0xFFFFFFFF),
-          Color(0xFFFFD85A),
-          Color(0xFFFF7A00),
-          Color(0x00FF7A00),
-        ],
-        stops: [0.05, 0.42, 0.74, 1],
-      ).createShader(Rect.fromCircle(center: center, radius: sunRadius * 1.45));
-    canvas.drawCircle(center, sunRadius * 1.45, glowPaint);
+      ..shader =
+          const RadialGradient(
+            colors: [
+              Color(0xFFFFFFFF),
+              Color(0xFFFFD85A),
+              Color(0xFFFF7A00),
+              Color(0x00FF7A00),
+            ],
+            stops: [0.05, 0.42, 0.74, 1],
+          ).createShader(
+            Rect.fromCircle(center: center, radius: scaledSunRadius * 1.45),
+          );
+    canvas.drawCircle(center, scaledSunRadius * 1.45, glowPaint);
 
     final surfacePaint = Paint()
       ..shader = const RadialGradient(
         colors: [Color(0xFFFFF4A8), Color(0xFFFF9D00), Color(0xFFD64500)],
-      ).createShader(Rect.fromCircle(center: center, radius: sunRadius));
-    canvas.drawCircle(center, sunRadius, surfacePaint);
+      ).createShader(Rect.fromCircle(center: center, radius: scaledSunRadius));
+    canvas.drawCircle(center, scaledSunRadius, surfacePaint);
   }
 
   void _paintPlanet(Canvas canvas, RenderedPlanet item, Offset sunCenter) {
@@ -130,6 +143,7 @@ class PlanetLayerPainter extends CustomPainter {
     return oldDelegate.planets != planets ||
         oldDelegate.selectedPlanetId != selectedPlanetId ||
         oldDelegate.hoveredPlanetId != hoveredPlanetId ||
-        oldDelegate.showLabels != showLabels;
+        oldDelegate.showLabels != showLabels ||
+        oldDelegate.sceneScale != sceneScale;
   }
 }

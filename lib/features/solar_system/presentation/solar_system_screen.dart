@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../painters/star_field_painter.dart';
 import '../widgets/control_panel.dart';
 import '../widgets/planet_info_panel.dart';
 import '../widgets/planet_toolbox.dart';
@@ -20,65 +21,87 @@ class _SolarSystemScreenState extends State<SolarSystemScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final isPortrait = constraints.maxHeight > constraints.maxWidth;
-            if (isPortrait) {
-              return const _OrientationPrompt();
-            }
+        child: RepaintBoundary(
+          child: CustomPaint(
+            painter: const StarFieldPainter(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isPortrait = constraints.maxHeight > constraints.maxWidth;
+                if (isPortrait) {
+                  return const _OrientationPrompt();
+                }
 
-            final compact = constraints.maxWidth < 1024;
-            final leftWidth = compact ? 210.0 : 278.0;
-            final rightWidth = compact ? 88.0 : 118.0;
-            const collapsedWidth = 54.0;
-            final toolboxHeight = compact ? 126.0 : 154.0;
+                final phoneLandscape = constraints.maxHeight < 520;
+                final compact = constraints.maxWidth < 1024;
+                final leftWidth = phoneLandscape
+                    ? 180.0
+                    : compact
+                    ? 210.0
+                    : 278.0;
+                final rightWidth = phoneLandscape
+                    ? 70.0
+                    : compact
+                    ? 88.0
+                    : 118.0;
+                final collapsedWidth = phoneLandscape ? 44.0 : 54.0;
+                final toolboxHeight = phoneLandscape
+                    ? 96.0
+                    : compact
+                    ? 126.0
+                    : 154.0;
+                final infoExpanded = phoneLandscape ? false : _isInfoExpanded;
 
-            return Column(
-              children: [
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      CollapsibleSidePanel(
-                        key: const ValueKey('info-sidebar'),
-                        expandedWidth: leftWidth,
-                        collapsedWidth: collapsedWidth,
-                        isExpanded: _isInfoExpanded,
-                        side: SidebarSide.left,
-                        label: 'Planet info',
-                        expandedIcon: Icons.arrow_left_outlined,
-                        collapsedIcon: Icons.arrow_right_outlined,
-                        onToggle: () {
-                          setState(() {
-                            _isInfoExpanded = !_isInfoExpanded;
-                          });
-                        },
-                        child: const PlanetInfoPanel(),
+                return Column(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          CollapsibleSidePanel(
+                            key: const ValueKey('info-sidebar'),
+                            expandedWidth: leftWidth,
+                            collapsedWidth: collapsedWidth,
+                            isExpanded: infoExpanded,
+                            side: SidebarSide.left,
+                            label: 'Planet info',
+                            expandedIcon: Icons.arrow_left_outlined,
+                            collapsedIcon: Icons.arrow_right_outlined,
+                            onToggle: () {
+                              setState(() {
+                                _isInfoExpanded = !_isInfoExpanded;
+                              });
+                            },
+                            child: const PlanetInfoPanel(),
+                          ),
+                          const Expanded(child: SolarSystemCanvas()),
+                          CollapsibleSidePanel(
+                            key: const ValueKey('controls-sidebar'),
+                            expandedWidth: rightWidth,
+                            collapsedWidth: collapsedWidth,
+                            isExpanded: _areControlsExpanded,
+                            side: SidebarSide.right,
+                            label: 'Controls',
+                            expandedIcon: Icons.keyboard_tab,
+                            collapsedIcon: Icons.arrow_left_outlined,
+                            onToggle: () {
+                              setState(() {
+                                _areControlsExpanded = !_areControlsExpanded;
+                              });
+                            },
+                            child: const ControlPanel(),
+                          ),
+                        ],
                       ),
-                      const Expanded(child: SolarSystemCanvas()),
-                      CollapsibleSidePanel(
-                        key: const ValueKey('controls-sidebar'),
-                        expandedWidth: rightWidth,
-                        collapsedWidth: collapsedWidth,
-                        isExpanded: _areControlsExpanded,
-                        side: SidebarSide.right,
-                        label: 'Controls',
-                        expandedIcon: Icons.keyboard_tab,
-                        collapsedIcon: Icons.arrow_left_outlined,
-                        onToggle: () {
-                          setState(() {
-                            _areControlsExpanded = !_areControlsExpanded;
-                          });
-                        },
-                        child: const ControlPanel(),
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(height: toolboxHeight, child: const PlanetToolbox()),
-              ],
-            );
-          },
+                    ),
+                    SizedBox(
+                      height: toolboxHeight,
+                      child: const PlanetToolbox(),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -116,7 +139,7 @@ class CollapsibleSidePanel extends StatelessWidget {
     return SizedBox(
       width: isExpanded ? expandedWidth : collapsedWidth,
       child: DecoratedBox(
-        decoration: const BoxDecoration(color: Color(0xFF020711)),
+        decoration: const BoxDecoration(color: Color(0x33020711)),
         child: Stack(
           fit: StackFit.expand,
           children: [

@@ -52,6 +52,19 @@ void main() {
     expect(find.byIcon(Icons.play_arrow), findsNothing);
   });
 
+  testWidgets('renders without overflow on phone landscape', (tester) async {
+    tester.view.physicalSize = const Size(932, 430);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpApp(tester);
+
+    expect(find.byKey(const ValueKey('toggle-info-sidebar')), findsOneWidget);
+    expect(find.text('DRAG & DROP TO ADD PLANETS'), findsOneWidget);
+    expect(find.byIcon(Icons.pause), findsOneWidget);
+  });
+
   testWidgets('dragging Earth adds and selects it', (tester) async {
     tester.view.physicalSize = const Size(1400, 800);
     tester.view.devicePixelRatio = 1;

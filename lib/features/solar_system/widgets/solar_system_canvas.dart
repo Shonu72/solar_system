@@ -23,6 +23,7 @@ class SolarSystemCanvas extends ConsumerStatefulWidget {
 class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
     with TickerProviderStateMixin {
   static const _sceneSize = Size(1180, 690);
+  static const _phoneSceneScale = 0.72;
 
   final TransformationController _transformController =
       TransformationController();
@@ -34,6 +35,7 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
   Duration? _lastTick;
   Duration? _lastCinematicStep;
   double _simulationSeconds = 0;
+  double _sceneScale = 1;
 
   @override
   void initState() {
@@ -113,6 +115,7 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
     return LayoutBuilder(
       builder: (context, constraints) {
         _viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
+        _sceneScale = constraints.maxHeight < 360 ? _phoneSceneScale : 1;
         return DragTarget<PlanetModel>(
           onWillAcceptWithDetails: (_) {
             controller.setDropHighlight(true);
@@ -169,17 +172,23 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
                                 planets: state.availablePlanets,
                                 showLabels: state.showOrbitLabels,
                                 highlightOrbitIndex: state.highlightOrbitIndex,
+                                sceneScale: _sceneScale,
                               ),
                             ),
                           ),
-                          const RepaintBoundary(
-                            child: CustomPaint(painter: AsteroidBeltPainter()),
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: AsteroidBeltPainter(
+                                sceneScale: _sceneScale,
+                              ),
+                            ),
                           ),
                           RepaintBoundary(
                             child: CustomPaint(
                               painter: OrbitTrailPainter(
                                 planets: state.placedPlanets,
                                 elapsedSeconds: () => _simulationSeconds,
+                                sceneScale: _sceneScale,
                                 repaint: _renderClock,
                               ),
                             ),
@@ -192,6 +201,7 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
                                 selectedPlanetId: state.selectedPlanetId,
                                 hoveredPlanetId: state.hoveredPlanetId,
                                 showLabels: state.showOrbitLabels,
+                                sceneScale: _sceneScale,
                                 repaint: _renderClock,
                               ),
                             ),
@@ -221,12 +231,12 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
         startAngle: placed.startAngle,
       );
       final planetCenter = Offset(
-        center.dx + position.x,
-        center.dy + position.y,
+        center.dx + position.x * _sceneScale,
+        center.dy + position.y * _sceneScale,
       );
       final hitRadius = math.max(
         22,
-        placed.planet.size * position.scale / 2 + 10,
+        placed.planet.size * position.scale * _sceneScale / 2 + 10,
       );
       if ((localPosition - planetCenter).distance <= hitRadius) {
         return placed.id;
@@ -248,7 +258,10 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
       elapsedSeconds: _simulationSeconds - planet.createdAtSeconds,
       startAngle: planet.startAngle,
     );
-    final point = Offset(center.dx + position.x, center.dy + position.y);
+    final point = Offset(
+      center.dx + position.x * _sceneScale,
+      center.dy + position.y * _sceneScale,
+    );
     const scale = 1.22;
     final target = Matrix4.identity()
       ..translateByDouble(
