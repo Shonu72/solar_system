@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -150,8 +151,8 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
       }
       _prevScale = details.scale;
 
-      // Apply zoom changes smoothly
-      if (deltaScale != 1.0) {
+      // Apply zoom changes smoothly only if there are at least 2 fingers on screen
+      if (details.pointerCount >= 2 && deltaScale != 1.0) {
         _targetZoom = (_targetZoom * deltaScale).clamp(0.18, 5.0);
       }
 
@@ -200,13 +201,7 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
   }
 
   void _focusPlanet(String id, SolarSystemState state) {
-    final placed = state.placedPlanets.where((planet) => planet.id == id);
-    if (placed.isEmpty) {
-      return;
-    }
-    final planet = placed.first;
-    _trackedPlanetId = id;
-    _targetZoom = (150.0 / planet.planet.size).clamp(1.1, 3.2);
+    // Keep camera focused on the Sun (0, 0, 0) at all times so it doesn't move off-center.
   }
 
   String? _hitTestPlanet(Offset localPosition, SolarSystemState state, Projector3D projector) {
@@ -302,102 +297,115 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
           },
           builder: (context, candidateData, rejectedData) {
             return RepaintBoundary(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onScaleStart: _handleScaleStart,
-                onScaleUpdate: _handleScaleUpdate,
-                child: MouseRegion(
-                  onHover: (event) {
-                    final hit = _hitTestPlanet(event.localPosition, state, projector);
-                    controller.hoverPlanet(hit == 'sun' ? null : hit);
-                  },
-                  onExit: (_) => controller.hoverPlanet(null),
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTapDown: (details) {
-                      final hit = _hitTestPlanet(
-                        details.localPosition,
-                        state,
-                        projector,
-                      );
-                      if (hit == 'sun') {
-                        controller.selectPlanet(null);
-                        _trackedPlanetId = null;
-                        _targetTarget = const Vector3d(0, 0, 0);
-                        _targetZoom = 1.05;
-                      } else {
-                        controller.selectPlanet(hit);
-                        if (hit != null) {
-                          _focusPlanet(hit, state);
-                        }
-                      }
+              child: Listener(
+                onPointerSignal: (pointerSignal) {
+                  if (pointerSignal is PointerScrollEvent) {
+                    setState(() {
+                      // Positive scroll delta dy zoom out, negative zoom in
+                      const scrollSensitivity = 0.0015;
+                      final zoomFactor = 1.0 - pointerSignal.scrollDelta.dy * scrollSensitivity;
+                      _targetZoom = (_targetZoom * zoomFactor).clamp(0.18, 5.0);
+                      _activeZoom = _targetZoom;
+                    });
+                  }
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onScaleStart: _handleScaleStart,
+                  onScaleUpdate: _handleScaleUpdate,
+                  child: MouseRegion(
+                    onHover: (event) {
+                      final hit = _hitTestPlanet(event.localPosition, state, projector);
+                      controller.hoverPlanet(hit == 'sun' ? null : hit);
                     },
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: StarFieldPainter(
-                              showStars: state.showStars,
+                    onExit: (_) => controller.hoverPlanet(null),
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTapDown: (details) {
+                        final hit = _hitTestPlanet(
+                          details.localPosition,
+                          state,
+                          projector,
+                        );
+                        if (hit == 'sun' || hit == null) {
+                          controller.selectPlanet(null);
+                          _trackedPlanetId = null;
+                          _targetTarget = const Vector3d(0, 0, 0);
+                          _targetZoom = 1.05;
+                        } else {
+                          controller.selectPlanet(hit);
+                          if (hit != null) {
+                            _focusPlanet(hit, state);
+                          }
+                        }
+                      },
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: StarFieldPainter(
+                                showStars: state.showStars,
+                              ),
                             ),
                           ),
-                        ),
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: OrbitPathsPainter(
-                              planets: state.availablePlanets,
-                              showLabels: state.showOrbitLabels,
-                              highlightOrbitIndex: state.highlightOrbitIndex,
-                              sceneScale: _sceneScale,
-                              projector: projector,
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: OrbitPathsPainter(
+                                planets: state.availablePlanets,
+                                showLabels: state.showOrbitLabels,
+                                highlightOrbitIndex: state.highlightOrbitIndex,
+                                sceneScale: _sceneScale,
+                                projector: projector,
+                              ),
                             ),
                           ),
-                        ),
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: OrbitTrailPainter(
-                              planets: state.placedPlanets,
-                              elapsedSeconds: () => _simulationSeconds,
-                              sceneScale: _sceneScale,
-                              repaint: _renderClock,
-                              projector: projector,
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: OrbitTrailPainter(
+                                planets: state.placedPlanets,
+                                elapsedSeconds: () => _simulationSeconds,
+                                sceneScale: _sceneScale,
+                                repaint: _renderClock,
+                                projector: projector,
+                              ),
                             ),
                           ),
-                        ),
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: AsteroidBeltPainter(
-                              sceneScale: _sceneScale,
-                              projector: projector,
-                              drawFront: false,
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: AsteroidBeltPainter(
+                                sceneScale: _sceneScale,
+                                projector: projector,
+                                drawFront: false,
+                              ),
                             ),
                           ),
-                        ),
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: PlanetLayerPainter(
-                              planets: state.placedPlanets,
-                              elapsedSeconds: () => _simulationSeconds,
-                              selectedPlanetId: state.selectedPlanetId,
-                              hoveredPlanetId: state.hoveredPlanetId,
-                              showLabels: state.showOrbitLabels,
-                              sceneScale: _sceneScale,
-                              repaint: _renderClock,
-                              projector: projector,
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: PlanetLayerPainter(
+                                planets: state.placedPlanets,
+                                elapsedSeconds: () => _simulationSeconds,
+                                selectedPlanetId: state.selectedPlanetId,
+                                hoveredPlanetId: state.hoveredPlanetId,
+                                showLabels: state.showOrbitLabels,
+                                sceneScale: _sceneScale,
+                                repaint: _renderClock,
+                                projector: projector,
+                              ),
                             ),
                           ),
-                        ),
-                        RepaintBoundary(
-                          child: CustomPaint(
-                            painter: AsteroidBeltPainter(
-                              sceneScale: _sceneScale,
-                              projector: projector,
-                              drawFront: true,
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: AsteroidBeltPainter(
+                                sceneScale: _sceneScale,
+                                projector: projector,
+                                drawFront: true,
+                              ),
                             ),
                           ),
-                        ),
-                        if (candidateData.isNotEmpty) const _DropOverlay(),
-                      ],
+                          if (candidateData.isNotEmpty) const _DropOverlay(),
+                        ],
+                      ),
                     ),
                   ),
                 ),

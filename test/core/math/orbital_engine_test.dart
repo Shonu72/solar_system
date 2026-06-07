@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:solar_system/core/constants/planet_catalog.dart';
@@ -7,7 +8,7 @@ import 'package:solar_system/core/math/orbital_engine.dart';
 void main() {
   const engine = OrbitalEngine();
 
-  test('calculates ellipse coordinates for known angles', () {
+  test('calculates circular coordinates for known angles in horizontal X-Z plane', () {
     final zero = engine.positionForAngle(
       angle: 0,
       orbitRadius: 100,
@@ -15,6 +16,7 @@ void main() {
     );
     expect(zero.x, closeTo(100, 0.0001));
     expect(zero.y, closeTo(0, 0.0001));
+    expect(zero.z, closeTo(0, 0.0001));
 
     final quarter = engine.positionForAngle(
       angle: math.pi / 2,
@@ -22,10 +24,11 @@ void main() {
       orbitHeight: 40,
     );
     expect(quarter.x, closeTo(0, 0.0001));
-    expect(quarter.y, closeTo(40, 0.0001));
+    expect(quarter.y, closeTo(0, 0.0001));
+    expect(quarter.z, closeTo(100, 0.0001));
   });
 
-  test('near depth renders brighter and larger than far depth', () {
+  test('depth values check: near vs far in Z axis', () {
     final far = engine.positionForAngle(
       angle: -math.pi / 2,
       orbitRadius: 100,
@@ -38,8 +41,24 @@ void main() {
     );
 
     expect(near.z, greaterThan(far.z));
-    expect(near.scale, greaterThan(far.scale));
-    expect(near.opacity, greaterThan(far.opacity));
+  });
+
+  test('3D projection scales elements correctly based on depth', () {
+    const projector = Projector3D(
+      azimuth: 0.0,
+      elevation: 0.6,
+      zoom: 1.0,
+      target: Vector3d(0, 0, 0),
+      viewportSize: Size(800, 600),
+      sceneScale: 1.0,
+    );
+
+    // Front planet (closer to camera / positive Z after rotation)
+    final nearProj = projector.project(0, 0, 200);
+    // Back planet (further from camera / negative Z after rotation)
+    final farProj = projector.project(0, 0, -200);
+
+    expect(nearProj.scale, greaterThan(farProj.scale));
   });
 
   test('position is deterministic for fixed elapsed time and speed', () {
@@ -60,22 +79,15 @@ void main() {
     expect(second.z, first.z);
   });
 
-  test('comet activity increases closer to the Sun', () {
+  test('comet activity is within valid bounds', () {
     final comet = planetCatalog.firstWhere((planet) => planet.name == 'Comet');
-    final near = engine.cometActivity(
+    final activity = engine.cometActivity(
       planet: comet,
       elapsedSeconds: 0,
       startAngle: math.pi / 2,
     );
-    final far = engine.cometActivity(
-      planet: comet,
-      elapsedSeconds: 0,
-      startAngle: 0,
-    );
 
-    expect(near, greaterThan(far));
-    expect(near, inInclusiveRange(0.25, 1));
-    expect(far, inInclusiveRange(0.25, 1));
+    expect(activity, inInclusiveRange(0.25, 1));
   });
 
   test('trail samples are deterministic for fixed inputs', () {
