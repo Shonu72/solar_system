@@ -26,6 +26,20 @@ class OrbitPathsPainter extends CustomPainter {
     canvas.translate(center.dx, center.dy + 8);
     canvas.transform(matrix.storage);
 
+    final planePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.3
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+      ..color = const Color(0xFF5BA9FF).withValues(alpha: 0.08);
+    canvas.drawOval(
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: 1030 * sceneScale,
+        height: 332 * sceneScale,
+      ),
+      planePaint,
+    );
+
     for (var index = planets.length - 1; index >= 0; index--) {
       final planet = planets[index];
       final highlighted = index == highlightOrbitIndex;

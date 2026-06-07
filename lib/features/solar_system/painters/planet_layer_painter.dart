@@ -56,9 +56,15 @@ class PlanetLayerPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
+    final items = renderItems(size);
+
+    for (final item in items.where((item) => item.position.z < -0.08)) {
+      _paintPlanet(canvas, item, center);
+    }
+
     _paintSun(canvas, center);
 
-    for (final item in renderItems(size)) {
+    for (final item in items.where((item) => item.position.z >= -0.08)) {
       _paintPlanet(canvas, item, center);
     }
   }
@@ -117,7 +123,7 @@ class PlanetLayerPainter extends CustomPainter {
 
     surfacePainter.paintCometTail(canvas, item, elapsedSeconds(), sunCenter);
     surfacePainter.paintRingsBehind(canvas, item, opacity);
-    surfacePainter.paintPlanetBody(canvas, item, elapsedSeconds());
+    surfacePainter.paintPlanetBody(canvas, item, elapsedSeconds(), sunCenter);
     surfacePainter.paintRingsFront(canvas, item, opacity);
 
     if (showLabels || selected || hovered) {

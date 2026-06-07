@@ -89,6 +89,7 @@ class PlanetSurfacePainter {
     Canvas canvas,
     RenderedPlanet item,
     double elapsedSeconds,
+    Offset sunCenter,
   ) {
     final planet = item.placedPlanet.planet;
     final radius = item.visualSize / 2;
@@ -116,7 +117,7 @@ class PlanetSurfacePainter {
         _paintCometNucleus(canvas, item, opacity);
     }
 
-    _paintShade(canvas, item);
+    _paintShade(canvas, item, sunCenter);
     canvas.restore();
   }
 
@@ -313,13 +314,39 @@ class PlanetSurfacePainter {
     );
   }
 
-  void _paintShade(Canvas canvas, RenderedPlanet item) {
+  void _paintShade(Canvas canvas, RenderedPlanet item, Offset sunCenter) {
     final radius = item.visualSize / 2;
+    final lightVector = sunCenter - item.center;
+    final lightDirection = lightVector.distance == 0
+        ? const Offset(-1, -1)
+        : lightVector / lightVector.distance;
+    final shadowCenter = item.center - lightDirection * radius * 0.48;
+    final highlightCenter = item.center + lightDirection * radius * 0.36;
+
+    final highlightPaint = Paint()
+      ..shader =
+          RadialGradient(
+            colors: [
+              Colors.white.withValues(alpha: 0.24 * item.position.opacity),
+              Colors.transparent,
+            ],
+          ).createShader(
+            Rect.fromCircle(center: highlightCenter, radius: radius * 0.74),
+          );
+    canvas.drawCircle(item.center, radius, highlightPaint);
+
     final paint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.58, 0.5),
-        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.34)],
-      ).createShader(Rect.fromCircle(center: item.center, radius: radius));
+      ..shader =
+          RadialGradient(
+            colors: [
+              Colors.transparent,
+              Colors.black.withValues(alpha: 0.18),
+              Colors.black.withValues(alpha: 0.48),
+            ],
+            stops: const [0, 0.58, 1],
+          ).createShader(
+            Rect.fromCircle(center: shadowCenter, radius: radius * 1.35),
+          );
     canvas.drawCircle(item.center, radius, paint);
   }
 
