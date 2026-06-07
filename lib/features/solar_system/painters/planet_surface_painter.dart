@@ -11,20 +11,20 @@ class PlanetSurfacePainter {
 
   final OrbitalEngine engine;
 
-  void paintRingsBehind(Canvas canvas, RenderedPlanet item, double opacity) {
+  void paintRingsBehind(Canvas canvas, RenderedPlanet item, double opacity, Projector3D projector) {
     final planet = item.placedPlanet.planet;
     if (!planet.hasRing) {
       return;
     }
-    _paintRingArc(canvas, item, opacity, drawFront: false);
+    _paintRingArc(canvas, item, opacity, projector, drawFront: false);
   }
 
-  void paintRingsFront(Canvas canvas, RenderedPlanet item, double opacity) {
+  void paintRingsFront(Canvas canvas, RenderedPlanet item, double opacity, Projector3D projector) {
     final planet = item.placedPlanet.planet;
     if (!planet.hasRing) {
       return;
     }
-    _paintRingArc(canvas, item, opacity, drawFront: true);
+    _paintRingArc(canvas, item, opacity, projector, drawFront: true);
   }
 
   void paintCometTail(
@@ -353,44 +353,82 @@ class PlanetSurfacePainter {
   void _paintRingArc(
     Canvas canvas,
     RenderedPlanet item,
-    double opacity, {
+    double opacity,
+    Projector3D projector, {
     required bool drawFront,
   }) {
     final planet = item.placedPlanet.planet;
     final radius = item.visualSize / 2;
-    final ringWidth = switch (planet.ringStyle) {
-      PlanetRingStyle.saturn => radius * 4.0,
-      PlanetRingStyle.uranus => radius * 3.2,
-      PlanetRingStyle.thin => radius * 2.8,
-      PlanetRingStyle.none => radius * 0,
-    };
-    final ringHeight = switch (planet.ringStyle) {
-      PlanetRingStyle.saturn => radius * 1.45,
-      PlanetRingStyle.uranus => radius * 0.92,
-      PlanetRingStyle.thin => radius * 0.85,
-      PlanetRingStyle.none => radius * 0,
+
+    // Define the ring radius multiplier relative to planet size
+    final ringRadiiMultiplier = switch (planet.ringStyle) {
+      PlanetRingStyle.saturn => const [1.5, 1.8, 2.1],
+      PlanetRingStyle.uranus => const [1.3, 1.45, 1.6],
+      PlanetRingStyle.thin => const [1.3, 1.4],
+      PlanetRingStyle.none => const <double>[],
     };
 
-    canvas.save();
-    canvas.translate(item.center.dx, item.center.dy);
-    canvas.rotate((planet.axialTilt / 180) * math.pi * 0.18 - 0.28);
+    // Calculate planet's 3D position in world space
+    final angle = item.position.angle;
+    final planetX = planet.orbitRadius * math.cos(angle);
+    final planetZ = planet.orbitRadius * math.sin(angle);
+    const planetY = 0.0;
 
+    final planetProjected = projector.project(planetX, planetY, planetZ);
+    final tiltRad = (planet.axialTilt / 180) * math.pi;
     final baseAlpha = planet.ringStyle == PlanetRingStyle.saturn ? 0.72 : 0.42;
-    for (var i = 0; i < 3; i++) {
-      final rect = Rect.fromCenter(
-        center: Offset.zero,
-        width: ringWidth + i * radius * 0.22,
-        height: ringHeight + i * radius * 0.08,
-      );
+
+    for (var ringIdx = 0; ringIdx < ringRadiiMultiplier.length; ringIdx++) {
+      final ringRadius = planet.size * ringRadiiMultiplier[ringIdx];
       final paint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = math.max(1.2, radius * (0.09 - i * 0.016))
+        ..strokeWidth = math.max(1.0, radius * 0.09 * (1.0 - ringIdx * 0.15))
         ..color = planet.colors.first.withValues(
-          alpha: opacity * baseAlpha * (1 - i * 0.18),
+          alpha: opacity * baseAlpha * (1.0 - ringIdx * 0.18),
         );
-      canvas.drawArc(rect, drawFront ? 0 : math.pi, math.pi, false, paint);
-    }
 
-    canvas.restore();
+      const segments = 90;
+      for (var i = 0; i < segments; i++) {
+        final theta1 = (i * 2 * math.pi) / segments;
+        final theta2 = ((i + 1) * 2 * math.pi) / segments;
+
+        // Local space: circle in horizontal X-Z plane, rotated around X-axis by tiltRad
+        final lx1 = ringRadius * math.cos(theta1);
+        final lz1 = ringRadius * math.sin(theta1);
+        final rx1 = lx1;
+        final ry1 = -lz1 * math.sin(tiltRad);
+        final rz1 = lz1 * math.cos(tiltRad);
+
+        final lx2 = ringRadius * math.cos(theta2);
+        final lz2 = ringRadius * math.sin(theta2);
+        final rx2 = lx2;
+        final ry2 = -lz2 * math.sin(tiltRad);
+        final rz2 = lz2 * math.cos(tiltRad);
+
+        // Convert to world space
+        final wx1 = planetX + rx1;
+        final wy1 = planetY + ry1;
+        final wz1 = planetZ + rz1;
+
+        final wx2 = planetX + rx2;
+        final wy2 = planetY + ry2;
+        final wz2 = planetZ + rz2;
+
+        // Project to camera space
+        final proj1 = projector.project(wx1, wy1, wz1);
+        final proj2 = projector.project(wx2, wy2, wz2);
+
+        final segmentDepth = (proj1.z + proj2.z) / 2;
+        final isFront = segmentDepth >= planetProjected.z;
+
+        if (isFront == drawFront) {
+          canvas.drawLine(
+            Offset(proj1.x, proj1.y),
+            Offset(proj2.x, proj2.y),
+            paint,
+          );
+        }
+      }
+    }
   }
 }

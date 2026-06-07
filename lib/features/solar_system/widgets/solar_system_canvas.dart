@@ -22,15 +22,24 @@ class SolarSystemCanvas extends ConsumerStatefulWidget {
 
 class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
     with TickerProviderStateMixin {
-  static const _sceneSize = Size(1180, 690);
   static const _phoneSceneScale = 0.72;
 
-  final TransformationController _transformController =
-      TransformationController();
-  final OrbitalEngine _engine = const OrbitalEngine();
+  // Active camera values used for rendering (interpolated)
+  double _activeAzimuth = 0.0;
+  double _activeElevation = 0.6;
+  double _activeZoom = 1.0;
+  Vector3d _activeTarget = const Vector3d(0, 0, 0);
+
+  // Target camera values towards which the active values glide
+  double _targetAzimuth = 0.0;
+  double _targetElevation = 0.6;
+  double _targetZoom = 1.0;
+  Vector3d _targetTarget = const Vector3d(0, 0, 0);
+
+  // Tracked planet ID, if any (follows the planet in orbit)
+  String? _trackedPlanetId;
 
   late final AnimationController _renderClock;
-  Animation<Matrix4>? _cameraAnimation;
   Size _viewportSize = Size.zero;
   Duration? _lastTick;
   Duration? _lastCinematicStep;
@@ -40,13 +49,12 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
   @override
   void initState() {
     super.initState();
-    _renderClock =
-        AnimationController(
-            vsync: this,
-            duration: const Duration(milliseconds: 1000),
-          )
-          ..addListener(_tick)
-          ..repeat();
+    _renderClock = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )
+      ..addListener(_tick)
+      ..repeat();
   }
 
   @override
@@ -54,7 +62,6 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
     _renderClock
       ..removeListener(_tick)
       ..dispose();
-    _transformController.dispose();
     super.dispose();
   }
 
@@ -67,13 +74,18 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
     }
 
     final state = ref.read(solarSystemControllerProvider);
-    if (!state.isPlaying) {
-      return;
+    final delta = now - previous;
+    final dt = delta.inMicroseconds / Duration.microsecondsPerSecond;
+
+    if (state.isPlaying) {
+      _simulationSeconds += dt * state.timeSpeed;
     }
 
-    final delta = now - previous;
-    _simulationSeconds +=
-        delta.inMicroseconds / Duration.microsecondsPerSecond * state.timeSpeed;
+    // Update smooth camera transitions
+    _updateCamera(dt);
+
+    // Call setState to trigger a repaint with updated coordinates
+    setState(() {});
 
     if (state.cinematicModeEnabled &&
         (_lastCinematicStep == null ||
@@ -83,6 +95,155 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
           .read(solarSystemControllerProvider.notifier)
           .nextCinematicStep(_simulationSeconds);
     }
+  }
+
+  void _updateCamera(double dt) {
+    final state = ref.read(solarSystemControllerProvider);
+
+    // Update target coordinates if tracking a planet
+    if (_trackedPlanetId != null) {
+      final placed = state.placedPlanets.where((p) => p.id == _trackedPlanetId);
+      if (placed.isNotEmpty) {
+        final planet = placed.first;
+        final t = _simulationSeconds - planet.createdAtSeconds;
+        final angle = planet.startAngle + t * planet.planet.orbitalSpeed;
+        final x = planet.planet.orbitRadius * math.cos(angle);
+        final z = planet.planet.orbitRadius * math.sin(angle);
+        _targetTarget = Vector3d(x, 0, z);
+      }
+    }
+
+    if (state.cinematicModeEnabled) {
+      // Slowly spin the camera and gently weave elevation for a premium look
+      _targetAzimuth += dt * 0.05;
+      _targetElevation = 0.5 + math.sin(_simulationSeconds * 0.1) * 0.22;
+    }
+
+    // Frame-rate independent exponential interpolation
+    const k = 10.0;
+    final tFactor = (1.0 - math.exp(-k * dt)).clamp(0.0, 1.0);
+
+    _activeAzimuth += (_targetAzimuth - _activeAzimuth) * tFactor;
+    _activeElevation += (_targetElevation - _activeElevation) * tFactor;
+    _activeZoom += (_targetZoom - _activeZoom) * tFactor;
+    _activeTarget = Vector3d(
+      _activeTarget.x + (_targetTarget.x - _activeTarget.x) * tFactor,
+      _activeTarget.y + (_targetTarget.y - _activeTarget.y) * tFactor,
+      _activeTarget.z + (_targetTarget.z - _activeTarget.z) * tFactor,
+    );
+  }
+
+  double _prevScale = 1.0;
+
+  void _handleScaleStart(ScaleStartDetails details) {
+    _prevScale = 1.0;
+  }
+
+  void _handleScaleUpdate(ScaleUpdateDetails details) {
+    setState(() {
+      // Calculate frame-to-frame delta scale factor
+      double deltaScale = 1.0;
+      if (details.scale == 1.0) {
+        _prevScale = 1.0;
+      } else if (_prevScale != 0.0) {
+        deltaScale = details.scale / _prevScale;
+      }
+      _prevScale = details.scale;
+
+      // Apply zoom changes smoothly
+      if (deltaScale != 1.0) {
+        _targetZoom = (_targetZoom * deltaScale).clamp(0.18, 5.0);
+      }
+
+      // Rotate camera yaw & pitch by accumulating focal point movement
+      const rotateSensitivity = 0.006;
+      _targetAzimuth -= details.focalPointDelta.dx * rotateSensitivity;
+      _targetElevation = (_targetElevation + details.focalPointDelta.dy * rotateSensitivity)
+          .clamp(-math.pi / 2 + 0.05, math.pi / 2 - 0.05);
+
+      // Sync active parameters immediately during active gestures for responsiveness
+      _activeAzimuth = _targetAzimuth;
+      _activeElevation = _targetElevation;
+      _activeZoom = _targetZoom;
+      _activeTarget = _targetTarget;
+    });
+  }
+
+  void _handleFocusRequest(SolarSystemState state) {
+    switch (state.cameraFocusRequest.targetType) {
+      case CameraFocusTargetType.sun:
+        _trackedPlanetId = null;
+        _targetTarget = const Vector3d(0, 0, 0);
+        _targetZoom = 1.05;
+        _targetAzimuth = 0.0;
+        _targetElevation = 0.6;
+        break;
+      case CameraFocusTargetType.selectedPlanet:
+        final selectedId = state.selectedPlanetId;
+        if (selectedId != null) {
+          _focusPlanet(selectedId, state);
+        }
+        break;
+      case CameraFocusTargetType.planetName:
+        final planetName = state.cameraFocusRequest.planetName;
+        if (planetName == null) {
+          return;
+        }
+        for (final placed in state.placedPlanets) {
+          if (placed.planet.name == planetName) {
+            _focusPlanet(placed.id, state);
+            return;
+          }
+        }
+        break;
+    }
+  }
+
+  void _focusPlanet(String id, SolarSystemState state) {
+    final placed = state.placedPlanets.where((planet) => planet.id == id);
+    if (placed.isEmpty) {
+      return;
+    }
+    final planet = placed.first;
+    _trackedPlanetId = id;
+    _targetZoom = (150.0 / planet.planet.size).clamp(1.1, 3.2);
+  }
+
+  String? _hitTestPlanet(Offset localPosition, SolarSystemState state, Projector3D projector) {
+    final elapsed = _simulationSeconds;
+    final sortedPlanets = [...state.placedPlanets];
+
+    final projectedList = sortedPlanets.map((placed) {
+      final t = elapsed - placed.createdAtSeconds;
+      final angle = placed.startAngle + t * placed.planet.orbitalSpeed;
+      final x = placed.planet.orbitRadius * math.cos(angle);
+      final z = placed.planet.orbitRadius * math.sin(angle);
+      const y = 0.0;
+      final proj = projector.project(x, y, z);
+      final visualSize = placed.planet.size * _sceneScale * projector.zoom * proj.scale;
+      return (id: placed.id, proj: proj, visualSize: visualSize);
+    }).toList();
+
+    // Sort descending (closest first)
+    projectedList.sort((a, b) => b.proj.z.compareTo(a.proj.z));
+
+    for (final item in projectedList) {
+      final planetCenter = Offset(item.proj.x, item.proj.y);
+      final hitRadius = math.max(24.0, item.visualSize / 2 + 10);
+      if ((localPosition - planetCenter).distance <= hitRadius) {
+        return item.id;
+      }
+    }
+
+    final sunProj = projector.project(0, 0, 0);
+    final sunCenter = Offset(sunProj.x, sunProj.y);
+    final sunSize = 46.0 * _sceneScale * projector.zoom * sunProj.scale;
+    final sunHitRadius = math.max(32.0, sunSize + 10);
+    if ((localPosition - sunCenter).distance <= sunHitRadius) {
+      return 'sun';
+    }
+
+    return null;
   }
 
   @override
@@ -96,7 +257,11 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
         if (previous != null && previous != next) {
           _simulationSeconds = 0;
           _lastCinematicStep = null;
-          _animateCamera(Matrix4.identity());
+          _trackedPlanetId = null;
+          _targetTarget = const Vector3d(0, 0, 0);
+          _targetZoom = 1.0;
+          _targetAzimuth = 0.0;
+          _targetElevation = 0.6;
         }
       },
     );
@@ -116,6 +281,16 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
       builder: (context, constraints) {
         _viewportSize = Size(constraints.maxWidth, constraints.maxHeight);
         _sceneScale = constraints.maxHeight < 360 ? _phoneSceneScale : 1;
+
+        final projector = Projector3D(
+          azimuth: _activeAzimuth,
+          elevation: _activeElevation,
+          zoom: _activeZoom,
+          target: _activeTarget,
+          viewportSize: _viewportSize,
+          sceneScale: _sceneScale,
+        );
+
         return DragTarget<PlanetModel>(
           onWillAcceptWithDetails: (_) {
             controller.setDropHighlight(true);
@@ -127,88 +302,102 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
           },
           builder: (context, candidateData, rejectedData) {
             return RepaintBoundary(
-              child: InteractiveViewer(
-                key: const ValueKey('solar-system-viewer'),
-                transformationController: _transformController,
-                minScale: 0.55,
-                maxScale: 2.8,
-                boundaryMargin: const EdgeInsets.all(560),
-                constrained: false,
-                child: SizedBox(
-                  key: const ValueKey('solar-system-drop-zone'),
-                  width: _sceneSize.width,
-                  height: _sceneSize.height,
-                  child: MouseRegion(
-                    onHover: (event) {
-                      final hit = _hitTestPlanet(event.localPosition, state);
-                      controller.hoverPlanet(hit);
-                    },
-                    onExit: (_) => controller.hoverPlanet(null),
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapDown: (details) {
-                        final hit = _hitTestPlanet(
-                          details.localPosition,
-                          state,
-                        );
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onScaleStart: _handleScaleStart,
+                onScaleUpdate: _handleScaleUpdate,
+                child: MouseRegion(
+                  onHover: (event) {
+                    final hit = _hitTestPlanet(event.localPosition, state, projector);
+                    controller.hoverPlanet(hit == 'sun' ? null : hit);
+                  },
+                  onExit: (_) => controller.hoverPlanet(null),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapDown: (details) {
+                      final hit = _hitTestPlanet(
+                        details.localPosition,
+                        state,
+                        projector,
+                      );
+                      if (hit == 'sun') {
+                        controller.selectPlanet(null);
+                        _trackedPlanetId = null;
+                        _targetTarget = const Vector3d(0, 0, 0);
+                        _targetZoom = 1.05;
+                      } else {
                         controller.selectPlanet(hit);
                         if (hit != null) {
                           _focusPlanet(hit, state);
                         }
-                      },
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          RepaintBoundary(
-                            child: CustomPaint(
-                              painter: StarFieldPainter(
-                                showStars: state.showStars,
-                              ),
+                      }
+                    },
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: StarFieldPainter(
+                              showStars: state.showStars,
                             ),
                           ),
-                          RepaintBoundary(
-                            child: CustomPaint(
-                              painter: OrbitPathsPainter(
-                                planets: state.availablePlanets,
-                                showLabels: state.showOrbitLabels,
-                                highlightOrbitIndex: state.highlightOrbitIndex,
-                                sceneScale: _sceneScale,
-                              ),
+                        ),
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: OrbitPathsPainter(
+                              planets: state.availablePlanets,
+                              showLabels: state.showOrbitLabels,
+                              highlightOrbitIndex: state.highlightOrbitIndex,
+                              sceneScale: _sceneScale,
+                              projector: projector,
                             ),
                           ),
-                          RepaintBoundary(
-                            child: CustomPaint(
-                              painter: AsteroidBeltPainter(
-                                sceneScale: _sceneScale,
-                              ),
+                        ),
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: OrbitTrailPainter(
+                              planets: state.placedPlanets,
+                              elapsedSeconds: () => _simulationSeconds,
+                              sceneScale: _sceneScale,
+                              repaint: _renderClock,
+                              projector: projector,
                             ),
                           ),
-                          RepaintBoundary(
-                            child: CustomPaint(
-                              painter: OrbitTrailPainter(
-                                planets: state.placedPlanets,
-                                elapsedSeconds: () => _simulationSeconds,
-                                sceneScale: _sceneScale,
-                                repaint: _renderClock,
-                              ),
+                        ),
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: AsteroidBeltPainter(
+                              sceneScale: _sceneScale,
+                              projector: projector,
+                              drawFront: false,
                             ),
                           ),
-                          RepaintBoundary(
-                            child: CustomPaint(
-                              painter: PlanetLayerPainter(
-                                planets: state.placedPlanets,
-                                elapsedSeconds: () => _simulationSeconds,
-                                selectedPlanetId: state.selectedPlanetId,
-                                hoveredPlanetId: state.hoveredPlanetId,
-                                showLabels: state.showOrbitLabels,
-                                sceneScale: _sceneScale,
-                                repaint: _renderClock,
-                              ),
+                        ),
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: PlanetLayerPainter(
+                              planets: state.placedPlanets,
+                              elapsedSeconds: () => _simulationSeconds,
+                              selectedPlanetId: state.selectedPlanetId,
+                              hoveredPlanetId: state.hoveredPlanetId,
+                              showLabels: state.showOrbitLabels,
+                              sceneScale: _sceneScale,
+                              repaint: _renderClock,
+                              projector: projector,
                             ),
                           ),
-                          if (candidateData.isNotEmpty) const _DropOverlay(),
-                        ],
-                      ),
+                        ),
+                        RepaintBoundary(
+                          child: CustomPaint(
+                            painter: AsteroidBeltPainter(
+                              sceneScale: _sceneScale,
+                              projector: projector,
+                              drawFront: true,
+                            ),
+                          ),
+                        ),
+                        if (candidateData.isNotEmpty) const _DropOverlay(),
+                      ],
                     ),
                   ),
                 ),
@@ -218,126 +407,6 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
         );
       },
     );
-  }
-
-  String? _hitTestPlanet(Offset localPosition, SolarSystemState state) {
-    final center = Offset(_sceneSize.width / 2, _sceneSize.height / 2);
-    final elapsed = _simulationSeconds;
-    final sorted = _engine.sortByDepth(state.placedPlanets, elapsed).reversed;
-    for (final placed in sorted) {
-      final position = _engine.positionFor(
-        planet: placed.planet,
-        elapsedSeconds: elapsed - placed.createdAtSeconds,
-        startAngle: placed.startAngle,
-      );
-      final planetCenter = Offset(
-        center.dx + position.x * _sceneScale,
-        center.dy + position.y * _sceneScale,
-      );
-      final hitRadius = math.max(
-        22,
-        placed.planet.size * position.scale * _sceneScale / 2 + 10,
-      );
-      if ((localPosition - planetCenter).distance <= hitRadius) {
-        return placed.id;
-      }
-    }
-    return null;
-  }
-
-  void _focusPlanet(String id, SolarSystemState state) {
-    final placed = state.placedPlanets.where((planet) => planet.id == id);
-    if (placed.isEmpty || _viewportSize == Size.zero) {
-      return;
-    }
-
-    final planet = placed.first;
-    final center = Offset(_sceneSize.width / 2, _sceneSize.height / 2);
-    final position = _engine.positionFor(
-      planet: planet.planet,
-      elapsedSeconds: _simulationSeconds - planet.createdAtSeconds,
-      startAngle: planet.startAngle,
-    );
-    final point = Offset(
-      center.dx + position.x * _sceneScale,
-      center.dy + position.y * _sceneScale,
-    );
-    const scale = 1.22;
-    final target = Matrix4.identity()
-      ..translateByDouble(
-        _viewportSize.width / 2 - point.dx * scale,
-        _viewportSize.height / 2 - point.dy * scale,
-        0,
-        1,
-      )
-      ..scaleByDouble(scale, scale, scale, 1);
-    _animateCamera(target);
-  }
-
-  void _handleFocusRequest(SolarSystemState state) {
-    switch (state.cameraFocusRequest.targetType) {
-      case CameraFocusTargetType.sun:
-        _focusScenePoint(
-          Offset(_sceneSize.width / 2, _sceneSize.height / 2),
-          1.05,
-        );
-      case CameraFocusTargetType.selectedPlanet:
-        final selectedId = state.selectedPlanetId;
-        if (selectedId != null) {
-          _focusPlanet(selectedId, state);
-        }
-      case CameraFocusTargetType.planetName:
-        final planetName = state.cameraFocusRequest.planetName;
-        if (planetName == null) {
-          return;
-        }
-        for (final placed in state.placedPlanets) {
-          if (placed.planet.name == planetName) {
-            _focusPlanet(placed.id, state);
-            return;
-          }
-        }
-    }
-  }
-
-  void _focusScenePoint(Offset point, double scale) {
-    if (_viewportSize == Size.zero) {
-      return;
-    }
-    final target = Matrix4.identity()
-      ..translateByDouble(
-        _viewportSize.width / 2 - point.dx * scale,
-        _viewportSize.height / 2 - point.dy * scale,
-        0,
-        1,
-      )
-      ..scaleByDouble(scale, scale, scale, 1);
-    _animateCamera(target);
-  }
-
-  void _animateCamera(Matrix4 target) {
-    final animation =
-        Matrix4Tween(begin: _transformController.value, end: target).animate(
-          CurvedAnimation(parent: _renderClock, curve: Curves.easeOutCubic),
-        );
-
-    _cameraAnimation?.removeListener(_applyCameraAnimation);
-    _cameraAnimation = animation..addListener(_applyCameraAnimation);
-    _renderClock.reset();
-    _lastTick = null;
-    _renderClock.repeat();
-  }
-
-  void _applyCameraAnimation() {
-    final animation = _cameraAnimation;
-    if (animation == null) {
-      return;
-    }
-    _transformController.value = animation.value;
-    if (_renderClock.value > 0.98) {
-      animation.removeListener(_applyCameraAnimation);
-      _cameraAnimation = null;
-    }
   }
 }
 
@@ -375,3 +444,4 @@ class _DropOverlay extends StatelessWidget {
     );
   }
 }
+

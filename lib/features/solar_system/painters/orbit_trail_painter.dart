@@ -7,6 +7,7 @@ class OrbitTrailPainter extends CustomPainter {
   OrbitTrailPainter({
     required this.planets,
     required this.elapsedSeconds,
+    required this.projector,
     required Listenable repaint,
     this.sceneScale = 1,
     this.engine = const OrbitalEngine(),
@@ -16,13 +17,13 @@ class OrbitTrailPainter extends CustomPainter {
   final double Function() elapsedSeconds;
   final double sceneScale;
   final OrbitalEngine engine;
+  final Projector3D projector;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
     final elapsed = elapsedSeconds();
     for (final placed in planets) {
-      final samples = engine.trailSamples(
+      final samples = engine.trailSamples3D(
         planet: placed.planet,
         elapsedSeconds: elapsed - placed.createdAtSeconds,
         startAngle: placed.startAngle,
@@ -34,16 +35,20 @@ class OrbitTrailPainter extends CustomPainter {
       }
 
       for (var index = 0; index < samples.length - 1; index++) {
-        final alpha = (1 - index / samples.length) * 0.34;
+        final alpha = (1.0 - index / samples.length) * 0.34;
         final paint = Paint()
           ..style = PaintingStyle.stroke
-          ..strokeWidth = placed.planet.isComet ? 2.1 : 1.35
+          ..strokeWidth = (placed.planet.isComet ? 2.1 : 1.35) * sceneScale
           ..strokeCap = StrokeCap.round
           ..color = (placed.planet.trailColor ?? placed.planet.colors.first)
               .withValues(alpha: alpha);
+
+        final proj1 = projector.project(samples[index].x, samples[index].y, samples[index].z);
+        final proj2 = projector.project(samples[index + 1].x, samples[index + 1].y, samples[index + 1].z);
+
         canvas.drawLine(
-          center + samples[index] * sceneScale,
-          center + samples[index + 1] * sceneScale,
+          Offset(proj1.x, proj1.y),
+          Offset(proj2.x, proj2.y),
           paint,
         );
       }
@@ -53,6 +58,13 @@ class OrbitTrailPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant OrbitTrailPainter oldDelegate) {
     return oldDelegate.planets != planets ||
-        oldDelegate.sceneScale != sceneScale;
+        oldDelegate.sceneScale != sceneScale ||
+        oldDelegate.projector.azimuth != projector.azimuth ||
+        oldDelegate.projector.elevation != projector.elevation ||
+        oldDelegate.projector.zoom != projector.zoom ||
+        oldDelegate.projector.target.x != projector.target.x ||
+        oldDelegate.projector.target.y != projector.target.y ||
+        oldDelegate.projector.target.z != projector.target.z;
   }
 }
+

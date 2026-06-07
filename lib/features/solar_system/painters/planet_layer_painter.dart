@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/math/orbital_engine.dart';
 import '../../../core/models/placed_planet.dart';
+import '../../../core/models/orbit_position.dart';
 import '../models/rendered_planet.dart';
 import 'planet_surface_painter.dart';
 
@@ -14,6 +15,7 @@ class PlanetLayerPainter extends CustomPainter {
     required this.selectedPlanetId,
     required this.hoveredPlanetId,
     required this.showLabels,
+    required this.projector,
     required Listenable repaint,
     this.sceneScale = 1,
     this.engine = const OrbitalEngine(),
@@ -26,28 +28,34 @@ class PlanetLayerPainter extends CustomPainter {
   final bool showLabels;
   final double sceneScale;
   final OrbitalEngine engine;
+  final Projector3D projector;
   final PlanetSurfacePainter surfacePainter = const PlanetSurfacePainter();
 
   static const sunRadius = 46.0;
 
   List<RenderedPlanet> renderItems(Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
     final elapsed = elapsedSeconds();
-    final sorted = engine.sortByDepth(planets, elapsed);
-    return sorted.map((placed) {
-      final position = engine.positionFor(
-        planet: placed.planet,
-        elapsedSeconds: elapsed - placed.createdAtSeconds,
-        startAngle: placed.startAngle,
-      );
-      final visualSize = placed.planet.size * position.scale * sceneScale;
+    return planets.map((placed) {
+      final t = elapsed - placed.createdAtSeconds;
+      final angle = placed.startAngle + t * placed.planet.orbitalSpeed;
+      final x = placed.planet.orbitRadius * math.cos(angle);
+      final z = placed.planet.orbitRadius * math.sin(angle);
+      const y = 0.0;
+
+      final proj = projector.project(x, y, z);
+      final visualSize = placed.planet.size * sceneScale * projector.zoom * proj.scale;
+
       return RenderedPlanet(
         placedPlanet: placed,
-        position: position,
-        center: Offset(
-          center.dx + position.x * sceneScale,
-          center.dy + position.y * sceneScale,
+        position: OrbitPosition(
+          x: x,
+          y: y,
+          z: proj.z,
+          scale: proj.scale,
+          opacity: 1.0,
+          angle: angle,
         ),
+        center: Offset(proj.x, proj.y),
         visualSize: visualSize,
       );
     }).toList();
@@ -55,27 +63,42 @@ class PlanetLayerPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
     final items = renderItems(size);
+    final sunProj = projector.project(0, 0, 0);
+    final sunCenter = Offset(sunProj.x, sunProj.y);
 
-    for (final item in items.where((item) => item.position.z < -0.08)) {
-      _paintPlanet(canvas, item, center);
-    }
+    // Combine planets and Sun into a single list to sort by depth
+    final drawList = <dynamic>[];
+    drawList.addAll(items);
+    drawList.add(sunProj);
 
-    _paintSun(canvas, center);
+    // Sort ascending (furthest first, closest last)
+    drawList.sort((a, b) {
+      final aZ = a is RenderedPlanet ? a.position.z : (a as Vector3).z;
+      final bZ = b is RenderedPlanet ? b.position.z : (b as Vector3).z;
+      return aZ.compareTo(bZ);
+    });
 
-    for (final item in items.where((item) => item.position.z >= -0.08)) {
-      _paintPlanet(canvas, item, center);
+    for (final item in drawList) {
+      if (item is RenderedPlanet) {
+        _paintPlanet(canvas, item, sunCenter);
+      } else {
+        _paintSun(canvas, sunCenter);
+      }
     }
   }
 
   void _paintSun(Canvas canvas, Offset center) {
     final seconds = elapsedSeconds();
     final pulse = 0.5 + math.sin(seconds * 1.8) * 0.5;
+    
+    // Sun size scales with camera zoom and distance
+    final sunProj = projector.project(0, 0, 0);
+    final scaledSunRadius = sunRadius * sceneScale * projector.zoom * sunProj.scale;
+
     final haloPaint = Paint()
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 30)
       ..color = const Color(0xFFFFA51F).withValues(alpha: 0.25 + pulse * 0.1);
-    final scaledSunRadius = sunRadius * sceneScale;
     canvas.drawCircle(
       center,
       scaledSunRadius * (1.7 + pulse * 0.12),
@@ -122,9 +145,9 @@ class PlanetLayerPainter extends CustomPainter {
     }
 
     surfacePainter.paintCometTail(canvas, item, elapsedSeconds(), sunCenter);
-    surfacePainter.paintRingsBehind(canvas, item, opacity);
+    surfacePainter.paintRingsBehind(canvas, item, opacity, projector);
     surfacePainter.paintPlanetBody(canvas, item, elapsedSeconds(), sunCenter);
-    surfacePainter.paintRingsFront(canvas, item, opacity);
+    surfacePainter.paintRingsFront(canvas, item, opacity, projector);
 
     if (showLabels || selected || hovered) {
       final labelStyle = TextStyle(
@@ -150,6 +173,13 @@ class PlanetLayerPainter extends CustomPainter {
         oldDelegate.selectedPlanetId != selectedPlanetId ||
         oldDelegate.hoveredPlanetId != hoveredPlanetId ||
         oldDelegate.showLabels != showLabels ||
-        oldDelegate.sceneScale != sceneScale;
+        oldDelegate.sceneScale != sceneScale ||
+        oldDelegate.projector.azimuth != projector.azimuth ||
+        oldDelegate.projector.elevation != projector.elevation ||
+        oldDelegate.projector.zoom != projector.zoom ||
+        oldDelegate.projector.target.x != projector.target.x ||
+        oldDelegate.projector.target.y != projector.target.y ||
+        oldDelegate.projector.target.z != projector.target.z;
   }
 }
+
