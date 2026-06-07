@@ -32,6 +32,7 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
   Animation<Matrix4>? _cameraAnimation;
   Size _viewportSize = Size.zero;
   Duration? _lastTick;
+  Duration? _lastCinematicStep;
   double _simulationSeconds = 0;
 
   @override
@@ -71,6 +72,15 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
     final delta = now - previous;
     _simulationSeconds +=
         delta.inMicroseconds / Duration.microsecondsPerSecond * state.timeSpeed;
+
+    if (state.cinematicModeEnabled &&
+        (_lastCinematicStep == null ||
+            now - _lastCinematicStep! > const Duration(seconds: 3))) {
+      _lastCinematicStep = now;
+      ref
+          .read(solarSystemControllerProvider.notifier)
+          .nextCinematicStep(_simulationSeconds);
+    }
   }
 
   @override
@@ -83,7 +93,19 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
       (previous, next) {
         if (previous != null && previous != next) {
           _simulationSeconds = 0;
+          _lastCinematicStep = null;
           _animateCamera(Matrix4.identity());
+        }
+      },
+    );
+
+    ref.listen<int>(
+      solarSystemControllerProvider.select(
+        (value) => value.cameraFocusRequest.token,
+      ),
+      (previous, next) {
+        if (previous != next) {
+          _handleFocusRequest(ref.read(solarSystemControllerProvider));
         }
       },
     );
@@ -228,6 +250,47 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
     );
     final point = Offset(center.dx + position.x, center.dy + position.y);
     const scale = 1.22;
+    final target = Matrix4.identity()
+      ..translateByDouble(
+        _viewportSize.width / 2 - point.dx * scale,
+        _viewportSize.height / 2 - point.dy * scale,
+        0,
+        1,
+      )
+      ..scaleByDouble(scale, scale, scale, 1);
+    _animateCamera(target);
+  }
+
+  void _handleFocusRequest(SolarSystemState state) {
+    switch (state.cameraFocusRequest.targetType) {
+      case CameraFocusTargetType.sun:
+        _focusScenePoint(
+          Offset(_sceneSize.width / 2, _sceneSize.height / 2),
+          1.05,
+        );
+      case CameraFocusTargetType.selectedPlanet:
+        final selectedId = state.selectedPlanetId;
+        if (selectedId != null) {
+          _focusPlanet(selectedId, state);
+        }
+      case CameraFocusTargetType.planetName:
+        final planetName = state.cameraFocusRequest.planetName;
+        if (planetName == null) {
+          return;
+        }
+        for (final placed in state.placedPlanets) {
+          if (placed.planet.name == planetName) {
+            _focusPlanet(placed.id, state);
+            return;
+          }
+        }
+    }
+  }
+
+  void _focusScenePoint(Offset point, double scale) {
+    if (_viewportSize == Size.zero) {
+      return;
+    }
     final target = Matrix4.identity()
       ..translateByDouble(
         _viewportSize.width / 2 - point.dx * scale,

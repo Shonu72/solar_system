@@ -2,6 +2,20 @@ import '../../../core/constants/planet_catalog.dart';
 import '../../../core/models/placed_planet.dart';
 import '../../../core/models/planet_model.dart';
 
+enum CameraFocusTargetType { sun, selectedPlanet, planetName }
+
+class CameraFocusRequest {
+  const CameraFocusRequest({
+    required this.token,
+    required this.targetType,
+    this.planetName,
+  });
+
+  final int token;
+  final CameraFocusTargetType targetType;
+  final String? planetName;
+}
+
 class SolarSystemState {
   const SolarSystemState({
     required this.availablePlanets,
@@ -11,6 +25,9 @@ class SolarSystemState {
     required this.showOrbitLabels,
     required this.showStars,
     required this.cameraResetToken,
+    required this.cinematicModeEnabled,
+    required this.cinematicStepIndex,
+    required this.cameraFocusRequest,
     this.selectedPlanetId,
     this.hoveredPlanetId,
     this.highlightOrbitIndex,
@@ -25,6 +42,12 @@ class SolarSystemState {
       showOrbitLabels: true,
       showStars: true,
       cameraResetToken: 0,
+      cinematicModeEnabled: false,
+      cinematicStepIndex: 0,
+      cameraFocusRequest: CameraFocusRequest(
+        token: 0,
+        targetType: CameraFocusTargetType.sun,
+      ),
     );
   }
 
@@ -35,6 +58,9 @@ class SolarSystemState {
   final bool showOrbitLabels;
   final bool showStars;
   final int cameraResetToken;
+  final bool cinematicModeEnabled;
+  final int cinematicStepIndex;
+  final CameraFocusRequest cameraFocusRequest;
   final String? selectedPlanetId;
   final String? hoveredPlanetId;
   final int? highlightOrbitIndex;
@@ -56,6 +82,9 @@ class SolarSystemState {
     bool? showOrbitLabels,
     bool? showStars,
     int? cameraResetToken,
+    bool? cinematicModeEnabled,
+    int? cinematicStepIndex,
+    CameraFocusRequest? cameraFocusRequest,
     String? selectedPlanetId,
     String? hoveredPlanetId,
     int? highlightOrbitIndex,
@@ -71,6 +100,9 @@ class SolarSystemState {
       showOrbitLabels: showOrbitLabels ?? this.showOrbitLabels,
       showStars: showStars ?? this.showStars,
       cameraResetToken: cameraResetToken ?? this.cameraResetToken,
+      cinematicModeEnabled: cinematicModeEnabled ?? this.cinematicModeEnabled,
+      cinematicStepIndex: cinematicStepIndex ?? this.cinematicStepIndex,
+      cameraFocusRequest: cameraFocusRequest ?? this.cameraFocusRequest,
       selectedPlanetId: clearSelectedPlanet
           ? null
           : selectedPlanetId ?? this.selectedPlanetId,

@@ -20,7 +20,7 @@ class PlanetInfoPanel extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 4),
             child: Text(
-              'SOLAR SYSTEM\nLAB',
+              'SOLAR SYSTEM LAB',
               style: Theme.of(context).textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.w800,
                 color: const Color(0xFFE9F6FF),

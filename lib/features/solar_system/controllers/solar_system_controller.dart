@@ -14,6 +14,17 @@ final solarSystemControllerProvider =
 
 class SolarSystemController extends Notifier<SolarSystemState> {
   final IdFactory _ids = IdFactory();
+  static const cinematicSequence = [
+    'Sun',
+    'Mercury',
+    'Venus',
+    'Earth',
+    'Mars',
+    'Jupiter',
+    'Saturn',
+    'Uranus',
+    'Neptune',
+  ];
 
   @override
   SolarSystemState build() => SolarSystemState.initial();
@@ -53,6 +64,7 @@ class SolarSystemController extends Notifier<SolarSystemState> {
   void selectPlanet(String? id) {
     if (id == null) {
       state = state.copyWith(
+        cinematicModeEnabled: false,
         clearSelectedPlanet: true,
         clearHighlightOrbit: true,
       );
@@ -61,9 +73,11 @@ class SolarSystemController extends Notifier<SolarSystemState> {
 
     final placed = state.placedPlanets.where((planet) => planet.id == id);
     state = state.copyWith(
+      cinematicModeEnabled: false,
       selectedPlanetId: id,
       highlightOrbitIndex: placed.isEmpty ? null : placed.first.orbitIndex,
       clearHighlightOrbit: placed.isEmpty,
+      cameraFocusRequest: _focusRequest(CameraFocusTargetType.selectedPlanet),
     );
   }
 
@@ -96,12 +110,87 @@ class SolarSystemController extends Notifier<SolarSystemState> {
   }
 
   void resetCamera() {
-    state = state.copyWith(cameraResetToken: state.cameraResetToken + 1);
+    state = state.copyWith(
+      cinematicModeEnabled: false,
+      cameraResetToken: state.cameraResetToken + 1,
+    );
   }
 
   void resetScene() {
     state = SolarSystemState.initial().copyWith(
       cameraResetToken: state.cameraResetToken + 1,
     );
+  }
+
+  void toggleCinematicMode(double simulationSeconds) {
+    if (state.cinematicModeEnabled) {
+      state = state.copyWith(cinematicModeEnabled: false);
+      return;
+    }
+    _ensureCinematicPlanets(simulationSeconds);
+    state = state.copyWith(
+      cinematicModeEnabled: true,
+      cinematicStepIndex: 0,
+      cameraFocusRequest: _focusRequest(CameraFocusTargetType.sun),
+    );
+  }
+
+  void nextCinematicStep(double simulationSeconds) {
+    _ensureCinematicPlanets(simulationSeconds);
+    final nextIndex = (state.cinematicStepIndex + 1) % cinematicSequence.length;
+    final targetName = cinematicSequence[nextIndex];
+    state = state.copyWith(
+      cinematicModeEnabled: true,
+      cinematicStepIndex: nextIndex,
+      cameraFocusRequest: targetName == 'Sun'
+          ? _focusRequest(CameraFocusTargetType.sun)
+          : _focusRequest(
+              CameraFocusTargetType.planetName,
+              planetName: targetName,
+            ),
+    );
+  }
+
+  CameraFocusRequest _focusRequest(
+    CameraFocusTargetType targetType, {
+    String? planetName,
+  }) {
+    return CameraFocusRequest(
+      token: state.cameraFocusRequest.token + 1,
+      targetType: targetType,
+      planetName: planetName,
+    );
+  }
+
+  void _ensureCinematicPlanets(double simulationSeconds) {
+    var placedPlanets = [...state.placedPlanets];
+    var changed = false;
+    for (final name in cinematicSequence.skip(1)) {
+      final alreadyPlaced = placedPlanets.any((placed) {
+        return placed.planet.name == name;
+      });
+      if (alreadyPlaced) {
+        continue;
+      }
+      final planet = state.availablePlanets.firstWhere((item) {
+        return item.name == name;
+      });
+      final orbitIndex = state.availablePlanets.indexWhere((item) {
+        return item.name == planet.name;
+      });
+      placedPlanets.add(
+        PlacedPlanet(
+          id: _ids.next(planet.name.toLowerCase()),
+          planet: planet,
+          orbitIndex: orbitIndex,
+          startAngle: -math.pi / 2 + (orbitIndex * 0.16),
+          createdAtSeconds: simulationSeconds,
+        ),
+      );
+      changed = true;
+    }
+    if (changed) {
+      state = state.copyWith(placedPlanets: placedPlanets);
+    }
   }
 }

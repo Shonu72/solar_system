@@ -24,6 +24,34 @@ void main() {
     expect(find.byIcon(Icons.pause), findsOneWidget);
   });
 
+  testWidgets('sidebars can collapse and expand', (tester) async {
+    tester.view.physicalSize = const Size(1400, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpApp(tester);
+
+    expect(find.text('SELECTED PLANET'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('toggle-info-sidebar')));
+    await tester.pump();
+
+    expect(find.text('PLANET INFO'), findsOneWidget);
+    expect(find.text('SELECTED PLANET'), findsNothing);
+
+    await tester.tap(find.byKey(const ValueKey('toggle-info-sidebar')));
+    await tester.pump();
+
+    expect(find.text('SELECTED PLANET'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('toggle-controls-sidebar')));
+    await tester.pump();
+
+    expect(find.text('CONTROLS'), findsOneWidget);
+    expect(find.byIcon(Icons.play_arrow), findsNothing);
+  });
+
   testWidgets('dragging Earth adds and selects it', (tester) async {
     tester.view.physicalSize = const Size(1400, 800);
     tester.view.devicePixelRatio = 1;

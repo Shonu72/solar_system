@@ -41,6 +41,12 @@ class ControlPanel extends ConsumerWidget {
                 ),
                 _SpeedButton(speed: state.timeSpeed),
                 _ControlButton(
+                  icon: Icons.movie_creation_outlined,
+                  label: 'Cinematic',
+                  isActive: state.cinematicModeEnabled,
+                  onPressed: () => controller.toggleCinematicMode(0),
+                ),
+                _ControlButton(
                   icon: Icons.label,
                   label: 'Labels',
                   isActive: state.showOrbitLabels,
