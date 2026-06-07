@@ -19,6 +19,18 @@ class SolarSystemController extends Notifier<SolarSystemState> {
   SolarSystemState build() => SolarSystemState.initial();
 
   void addPlanet(PlanetModel planet, double simulationSeconds) {
+    final existing = state.placedPlanets.where((placed) {
+      return placed.planet.name == planet.name;
+    });
+    if (existing.isNotEmpty) {
+      final placed = existing.first;
+      state = state.copyWith(
+        selectedPlanetId: placed.id,
+        highlightOrbitIndex: placed.orbitIndex,
+      );
+      return;
+    }
+
     final index = state.availablePlanets.indexWhere((item) {
       return item.name == planet.name;
     });

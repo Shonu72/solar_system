@@ -7,7 +7,9 @@ import '../../../core/math/orbital_engine.dart';
 import '../../../core/models/planet_model.dart';
 import '../controllers/solar_system_controller.dart';
 import '../models/solar_system_state.dart';
+import '../painters/asteroid_belt_painter.dart';
 import '../painters/orbit_paths_painter.dart';
+import '../painters/orbit_trail_painter.dart';
 import '../painters/planet_layer_painter.dart';
 import '../painters/star_field_painter.dart';
 
@@ -145,6 +147,18 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
                                 planets: state.availablePlanets,
                                 showLabels: state.showOrbitLabels,
                                 highlightOrbitIndex: state.highlightOrbitIndex,
+                              ),
+                            ),
+                          ),
+                          const RepaintBoundary(
+                            child: CustomPaint(painter: AsteroidBeltPainter()),
+                          ),
+                          RepaintBoundary(
+                            child: CustomPaint(
+                              painter: OrbitTrailPainter(
+                                planets: state.placedPlanets,
+                                elapsedSeconds: () => _simulationSeconds,
+                                repaint: _renderClock,
                               ),
                             ),
                           ),

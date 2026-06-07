@@ -19,26 +19,14 @@ class PlanetInfoPanel extends ConsumerWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(18, 18, 18, 4),
-            child: Row(
-              children: [
-                const Icon(
-                  Icons.auto_awesome,
-                  color: Color(0xFF62C9FF),
-                  size: 28,
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    'SOLAR SYSTEM\nLAB',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: const Color(0xFFE9F6FF),
-                      height: 1.05,
-                      letterSpacing: 0,
-                    ),
-                  ),
-                ),
-              ],
+            child: Text(
+              'SOLAR SYSTEM\nLAB',
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: const Color(0xFFE9F6FF),
+                height: 1.05,
+                letterSpacing: 0,
+              ),
             ),
           ),
           GlassPanel(
@@ -200,10 +188,18 @@ class _Metric extends StatelessWidget {
               ),
             ),
           ),
-          Text(
-            value,
-            textAlign: TextAlign.right,
-            style: const TextStyle(color: Color(0xFFE9F6FF), letterSpacing: 0),
+          Flexible(
+            flex: 2,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFFE9F6FF),
+                letterSpacing: 0,
+              ),
+            ),
           ),
         ],
       ),

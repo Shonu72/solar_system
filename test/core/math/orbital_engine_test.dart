@@ -59,4 +59,43 @@ void main() {
     expect(second.y, first.y);
     expect(second.z, first.z);
   });
+
+  test('comet activity increases closer to the Sun', () {
+    final comet = planetCatalog.firstWhere((planet) => planet.name == 'Comet');
+    final near = engine.cometActivity(
+      planet: comet,
+      elapsedSeconds: 0,
+      startAngle: math.pi / 2,
+    );
+    final far = engine.cometActivity(
+      planet: comet,
+      elapsedSeconds: 0,
+      startAngle: 0,
+    );
+
+    expect(near, greaterThan(far));
+    expect(near, inInclusiveRange(0.25, 1));
+    expect(far, inInclusiveRange(0.25, 1));
+  });
+
+  test('trail samples are deterministic for fixed inputs', () {
+    final earth = planetCatalog.firstWhere((planet) => planet.name == 'Earth');
+    final first = engine.trailSamples(
+      planet: earth,
+      elapsedSeconds: 8,
+      startAngle: 0.4,
+      sampleCount: 6,
+      sampleSpacingSeconds: 0.2,
+    );
+    final second = engine.trailSamples(
+      planet: earth,
+      elapsedSeconds: 8,
+      startAngle: 0.4,
+      sampleCount: 6,
+      sampleSpacingSeconds: 0.2,
+    );
+
+    expect(first, hasLength(6));
+    expect(second, first);
+  });
 }

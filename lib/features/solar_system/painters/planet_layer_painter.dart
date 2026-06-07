@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../../core/math/orbital_engine.dart';
 import '../../../core/models/placed_planet.dart';
 import '../models/rendered_planet.dart';
+import 'planet_surface_painter.dart';
 
 class PlanetLayerPainter extends CustomPainter {
   PlanetLayerPainter({
@@ -23,6 +24,7 @@ class PlanetLayerPainter extends CustomPainter {
   final String? hoveredPlanetId;
   final bool showLabels;
   final OrbitalEngine engine;
+  final PlanetSurfacePainter surfacePainter = const PlanetSurfacePainter();
 
   static const sunRadius = 46.0;
 
@@ -52,7 +54,7 @@ class PlanetLayerPainter extends CustomPainter {
     _paintSun(canvas, center);
 
     for (final item in renderItems(size)) {
-      _paintPlanet(canvas, item);
+      _paintPlanet(canvas, item, center);
     }
   }
 
@@ -83,7 +85,7 @@ class PlanetLayerPainter extends CustomPainter {
     canvas.drawCircle(center, sunRadius, surfacePaint);
   }
 
-  void _paintPlanet(Canvas canvas, RenderedPlanet item) {
+  void _paintPlanet(Canvas canvas, RenderedPlanet item, Offset sunCenter) {
     final planet = item.placedPlanet.planet;
     final selected = item.placedPlanet.id == selectedPlanetId;
     final hovered = item.placedPlanet.id == hoveredPlanetId;
@@ -100,75 +102,10 @@ class PlanetLayerPainter extends CustomPainter {
       canvas.drawCircle(item.center, radius + 8, ringPaint);
     }
 
-    if (planet.isComet) {
-      final tailPaint = Paint()
-        ..shader =
-            LinearGradient(
-              colors: [
-                const Color(0xFFE8FAFF).withValues(alpha: opacity * 0.8),
-                const Color(0x0083D8FF),
-              ],
-            ).createShader(
-              Rect.fromPoints(
-                item.center - Offset(radius * 5, radius * 1.2),
-                item.center,
-              ),
-            );
-      final tail = Path()
-        ..moveTo(item.center.dx - radius * 5.3, item.center.dy - radius * 1.4)
-        ..quadraticBezierTo(
-          item.center.dx - radius * 1.6,
-          item.center.dy,
-          item.center.dx,
-          item.center.dy,
-        )
-        ..quadraticBezierTo(
-          item.center.dx - radius * 1.6,
-          item.center.dy + radius * 1.2,
-          item.center.dx - radius * 5.3,
-          item.center.dy + radius * 1.4,
-        )
-        ..close();
-      canvas.drawPath(tail, tailPaint);
-    }
-
-    if (planet.hasRing) {
-      final ringPaint = Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..color = planet.colors.first.withValues(alpha: opacity * 0.65);
-      canvas.save();
-      canvas.translate(item.center.dx, item.center.dy);
-      canvas.rotate(-0.25);
-      canvas.drawOval(
-        Rect.fromCenter(
-          center: Offset.zero,
-          width: radius * 3.3,
-          height: radius * 1.15,
-        ),
-        ringPaint,
-      );
-      canvas.restore();
-    }
-
-    final bodyPaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.35, -0.45),
-        colors: [
-          Colors.white.withValues(alpha: 0.9 * opacity),
-          planet.colors.first.withValues(alpha: opacity),
-          planet.colors.last.withValues(alpha: opacity),
-        ],
-        stops: const [0, 0.35, 1],
-      ).createShader(Rect.fromCircle(center: item.center, radius: radius));
-    canvas.drawCircle(item.center, radius, bodyPaint);
-
-    final shadePaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(0.58, 0.5),
-        colors: [Colors.transparent, Colors.black.withValues(alpha: 0.32)],
-      ).createShader(Rect.fromCircle(center: item.center, radius: radius));
-    canvas.drawCircle(item.center, radius, shadePaint);
+    surfacePainter.paintCometTail(canvas, item, elapsedSeconds(), sunCenter);
+    surfacePainter.paintRingsBehind(canvas, item, opacity);
+    surfacePainter.paintPlanetBody(canvas, item, elapsedSeconds());
+    surfacePainter.paintRingsFront(canvas, item, opacity);
 
     if (showLabels || selected || hovered) {
       final labelStyle = TextStyle(

@@ -1,5 +1,17 @@
 import 'package:flutter/material.dart';
 
+enum PlanetSurfaceStyle {
+  rocky,
+  cloudy,
+  ocean,
+  gasGiant,
+  iceGiant,
+  moon,
+  comet,
+}
+
+enum PlanetRingStyle { none, thin, saturn, uranus }
+
 @immutable
 class PlanetModel {
   const PlanetModel({
@@ -15,8 +27,10 @@ class PlanetModel {
     required this.rotationPeriodLabel,
     required this.facts,
     required this.colors,
-    this.hasRing = false,
-    this.isComet = false,
+    required this.surfaceStyle,
+    this.ringStyle = PlanetRingStyle.none,
+    this.trailColor,
+    this.axialTilt = 0,
   });
 
   final String name;
@@ -31,6 +45,11 @@ class PlanetModel {
   final String rotationPeriodLabel;
   final List<String> facts;
   final List<Color> colors;
-  final bool hasRing;
-  final bool isComet;
+  final PlanetSurfaceStyle surfaceStyle;
+  final PlanetRingStyle ringStyle;
+  final Color? trailColor;
+  final double axialTilt;
+
+  bool get hasRing => ringStyle != PlanetRingStyle.none;
+  bool get isComet => surfaceStyle == PlanetSurfaceStyle.comet;
 }

@@ -13,6 +13,11 @@ class PlanetToolbox extends ConsumerWidget {
     final planets = ref.watch(
       solarSystemControllerProvider.select((state) => state.availablePlanets),
     );
+    final placedNames = ref.watch(
+      solarSystemControllerProvider.select((state) {
+        return state.placedPlanets.map((placed) => placed.planet.name).toSet();
+      }),
+    );
 
     return DecoratedBox(
       decoration: const BoxDecoration(color: Color(0xFF020711)),
@@ -38,7 +43,11 @@ class PlanetToolbox extends ConsumerWidget {
                 itemCount: planets.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 18),
                 itemBuilder: (context, index) {
-                  return _ToolboxPlanet(planet: planets[index]);
+                  final planet = planets[index];
+                  return _ToolboxPlanet(
+                    planet: planet,
+                    isPlaced: placedNames.contains(planet.name),
+                  );
                 },
               ),
             ),
@@ -50,32 +59,43 @@ class PlanetToolbox extends ConsumerWidget {
 }
 
 class _ToolboxPlanet extends StatelessWidget {
-  const _ToolboxPlanet({required this.planet});
+  const _ToolboxPlanet({required this.planet, required this.isPlaced});
 
   final PlanetModel planet;
+  final bool isPlaced;
 
   @override
   Widget build(BuildContext context) {
-    final chip = SizedBox(
+    final chip = Opacity(
       key: ValueKey('toolbox-${planet.name}'),
-      width: 86,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          _PlanetBadge(planet: planet, size: 58),
-          const SizedBox(height: 8),
-          Text(
-            planet.name,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0,
+      opacity: isPlaced ? 0.44 : 1,
+      child: SizedBox(
+        width: 86,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _PlanetBadge(planet: planet, size: 58),
+            const SizedBox(height: 8),
+            Text(
+              planet.name,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isPlaced ? const Color(0xFF8EA6BD) : Colors.white,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+
+    if (isPlaced) {
+      return Tooltip(
+        message: '${planet.name} is already in orbit',
+        child: chip,
+      );
+    }
 
     return Draggable<PlanetModel>(
       data: planet,
