@@ -1,11 +1,15 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
+import '../../../core/math/orbital_engine.dart';
 import '../../../core/models/planet_model.dart';
 
 class OrbitPathsPainter extends CustomPainter {
   const OrbitPathsPainter({
     required this.planets,
     required this.showLabels,
+    required this.projector,
     this.highlightOrbitIndex,
     this.sceneScale = 1,
   });
@@ -14,50 +18,59 @@ class OrbitPathsPainter extends CustomPainter {
   final bool showLabels;
   final int? highlightOrbitIndex;
   final double sceneScale;
+  final Projector3D projector;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final matrix = Matrix4.identity()
-      ..setEntry(3, 2, 0.001)
-      ..rotateX(0.92);
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy + 8);
-    canvas.transform(matrix.storage);
-
     final planePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.3
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
       ..color = const Color(0xFF5BA9FF).withValues(alpha: 0.08);
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset.zero,
-        width: 1030 * sceneScale,
-        height: 332 * sceneScale,
-      ),
-      planePaint,
-    );
+
+    // Draw the overall plane boundary in 3D (a large circle of radius 530)
+    final boundaryPath = Path();
+    const segments = 120;
+    for (var i = 0; i <= segments; i++) {
+      final theta = (i * 2 * math.pi) / segments;
+      final x = 530 * math.cos(theta);
+      final z = 530 * math.sin(theta);
+      final proj = projector.project(x, 0.0, z);
+      if (i == 0) {
+        boundaryPath.moveTo(proj.x, proj.y);
+      } else {
+        boundaryPath.lineTo(proj.x, proj.y);
+      }
+    }
+    canvas.drawPath(boundaryPath, planePaint);
 
     for (var index = planets.length - 1; index >= 0; index--) {
       final planet = planets[index];
       final highlighted = index == highlightOrbitIndex;
       final paint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = highlighted ? 2.2 : 1
+        ..strokeWidth = highlighted ? 2.2 : 1.0
         ..color = highlighted
             ? const Color(0xFF4DB7FF).withValues(alpha: 0.82)
             : const Color(0xFF9AB8D8).withValues(alpha: 0.22);
-      final rect = Rect.fromCenter(
-        center: Offset.zero,
-        width: planet.orbitRadius * 2 * sceneScale,
-        height: planet.orbitHeight * 2 * sceneScale,
-      );
-      canvas.drawOval(rect, paint);
-    }
 
-    canvas.restore();
+      final rx = planet.orbitRadius;
+      final rz = planet.orbitRadius;
+
+      final path = Path();
+      for (var i = 0; i <= segments; i++) {
+        final theta = (i * 2 * math.pi) / segments;
+        final x = rx * math.cos(theta);
+        final z = rz * math.sin(theta);
+        final proj = projector.project(x, 0.0, z);
+        if (i == 0) {
+          path.moveTo(proj.x, proj.y);
+        } else {
+          path.lineTo(proj.x, proj.y);
+        }
+      }
+      canvas.drawPath(path, paint);
+    }
 
     if (!showLabels) {
       return;
@@ -80,10 +93,10 @@ class OrbitPathsPainter extends CustomPainter {
         text: TextSpan(text: planet.name, style: textStyle),
         textDirection: TextDirection.ltr,
       )..layout();
-      final offset = Offset(
-        center.dx + planet.orbitRadius * sceneScale + 10,
-        center.dy - planet.orbitHeight * sceneScale * 0.34 - label.height / 2,
-      );
+
+      final proj = projector.project(planet.orbitRadius, 0.0, 0.0);
+      final offset = Offset(proj.x + 10, proj.y - label.height / 2);
+
       canvas.drawCircle(offset + const Offset(-6, 8), 2.5, labelPaint);
       label.paint(canvas, offset);
     }
@@ -94,6 +107,13 @@ class OrbitPathsPainter extends CustomPainter {
     return oldDelegate.planets != planets ||
         oldDelegate.showLabels != showLabels ||
         oldDelegate.highlightOrbitIndex != highlightOrbitIndex ||
-        oldDelegate.sceneScale != sceneScale;
+        oldDelegate.sceneScale != sceneScale ||
+        oldDelegate.projector.azimuth != projector.azimuth ||
+        oldDelegate.projector.elevation != projector.elevation ||
+        oldDelegate.projector.zoom != projector.zoom ||
+        oldDelegate.projector.target.x != projector.target.x ||
+        oldDelegate.projector.target.y != projector.target.y ||
+        oldDelegate.projector.target.z != projector.target.z;
   }
 }
+
