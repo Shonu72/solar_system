@@ -334,9 +334,7 @@ class _SolarSystemCanvasState extends ConsumerState<SolarSystemCanvas>
                           _targetZoom = 1.05;
                         } else {
                           controller.selectPlanet(hit);
-                          if (hit != null) {
-                            _focusPlanet(hit, state);
-                          }
+                          _focusPlanet(hit, state);
                         }
                       },
                       child: Stack(
