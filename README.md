@@ -88,7 +88,4 @@ Watch the **Solar System Lab** in action: interactive planet drag-and-drop, 3D o
 
 ---
 
-## 📄 License
-
-This project is open-source and available under the [MIT License](LICENSE).
 
